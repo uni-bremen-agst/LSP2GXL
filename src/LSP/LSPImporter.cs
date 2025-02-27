@@ -371,37 +371,37 @@ public record LSPImporter(
                                             // Depending on capabilities and settings, we connect the nodes with edges.
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Definition) && (Handler.ServerCapabilities?.DefinitionProvider).TrueOrValue())
                                             {
-						TraceEdge($"Gathering edges of type {EdgeKind.Definition}");
+                                                TraceEdge($"Gathering edges of type {EdgeKind.Definition}");
                                                 await ConnectNodeViaAsync(Handler.DefinitionAsync, LSP.Definition, node, graph, token: token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Declaration) && (Handler.ServerCapabilities?.DeclarationProvider).TrueOrValue())
                                             {
-						TraceEdge($"Gathering edges of type {EdgeKind.Declaration}");
+                                                TraceEdge($"Gathering edges of type {EdgeKind.Declaration}");
                                                 await ConnectNodeViaAsync(Handler.DeclarationAsync, LSP.Declaration, node, graph, token: token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.TypeDefinition) && (Handler.ServerCapabilities?.TypeDefinitionProvider).TrueOrValue())
                                             {
-						TraceEdge($"Gathering edges of type {EdgeKind.TypeDefinition}");
+                                                TraceEdge($"Gathering edges of type {EdgeKind.TypeDefinition}");
                                                 await ConnectNodeViaAsync(Handler.TypeDefinitionAsync, LSP.OfType, node, graph, token: token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Implementation) && (Handler.ServerCapabilities?.ImplementationProvider).TrueOrValue())
                                             {
-						TraceEdge($"Gathering edges of type {EdgeKind.Implementation}");
+                                                TraceEdge($"Gathering edges of type {EdgeKind.Implementation}");
                                                 await ConnectNodeViaAsync(Handler.ImplementationAsync, LSP.ImplementationOf, node, graph, reverseDirection: true, token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Reference) && (Handler.ServerCapabilities?.ReferencesProvider).TrueOrValue())
                                             {
-						TraceEdge($"Gathering edges of type {EdgeKind.Reference}");
+                                                TraceEdge($"Gathering edges of type {EdgeKind.Reference}");
                                                 await ConnectNodeViaAsync((p, line, character) => Handler.ReferencesAsync(p, line, character), LSP.Reference, node, graph, reverseDirection: true, token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Call) && (Handler.ServerCapabilities?.CallHierarchyProvider).TrueOrValue())
                                             {
-						TraceEdge($"Gathering edges of type {EdgeKind.Call}");
+                                                TraceEdge($"Gathering edges of type {EdgeKind.Call}");
                                                 await HandleEdgeHierarchy(() => HandleCallHierarchyAsync(node, graph, token));
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Extend) && (Handler.ServerCapabilities?.TypeHierarchyProvider).TrueOrValue())
                                             {
-						TraceEdge($"Gathering edges of type {EdgeKind.Extend}");
+                                                TraceEdge($"Gathering edges of type {EdgeKind.Extend}");
                                                 await HandleEdgeHierarchy(() => HandleTypeHierarchyAsync(node, graph, token));
                                             }
                                         }
@@ -453,15 +453,15 @@ public record LSPImporter(
 
         return graph;
 
-	static void TraceEdge(string message)
-	{
-	    // Turn this on to detect edge types that are expensive to obtain from the language server.
-	    if (false)
-	    { 
-	        Trace.TraceInformation(message);
-	    }
-	}
-	
+        static void TraceEdge(string message)
+        {
+            // Turn this on to detect edge types that are expensive to obtain from the language server.
+            if (false)
+            {
+                Trace.TraceInformation(message);
+            }
+        }
+
         async Task HandleEdgeHierarchy(Func<Task> hierarchyFunction)
         {
             try
@@ -587,24 +587,30 @@ public record LSPImporter(
     private async Task HandleCallHierarchyAsync(Node node, Graph graph, CancellationToken token)
     {
         await lspEdgeSemaphore.WaitAsync(token);
-        IAsyncEnumerable<CallHierarchyItem> results = Handler.OutgoingCallsAsync(SelectItem, node.FilePath(),
-                                                                                 node.SourceLine - 1 ?? 0,
-                                                                                 node.SourceColumn - 1 ?? 0);
-        await foreach (CallHierarchyItem item in results)
+        try
+        {
+            IAsyncEnumerable<CallHierarchyItem> results = Handler.OutgoingCallsAsync(SelectItem, node.FilePath(),
+                                                                                     node.SourceLine - 1 ?? 0,
+                                                                                     node.SourceColumn - 1 ?? 0);
+            await foreach (CallHierarchyItem item in results)
+            {
+                lspEdgeSemaphore.Release();
+                token.ThrowIfCancellationRequested();
+                Node? targetNode = FindNodesByLocation(item.Uri.Path, Range.FromLspRange(item.Range), graph).FirstOrDefault();
+                if (targetNode == null)
+                {
+                    await lspEdgeSemaphore.WaitAsync(token);
+                    continue;
+                }
+                Edge? edge = AddEdge(node, targetNode, LSP.Call, false, graph);
+                edge?.SetRange(SelectionRangeAttribute, Range.FromLspRange(item.SelectionRange));
+                await lspEdgeSemaphore.WaitAsync(token);
+            }
+        }
+        finally
         {
             lspEdgeSemaphore.Release();
-            token.ThrowIfCancellationRequested();
-            Node? targetNode = FindNodesByLocation(item.Uri.Path, Range.FromLspRange(item.Range), graph).FirstOrDefault();
-            if (targetNode == null)
-            {
-                await lspEdgeSemaphore.WaitAsync(token);
-                continue;
-            }
-            Edge? edge = AddEdge(node, targetNode, LSP.Call, false, graph);
-            edge?.SetRange(SelectionRangeAttribute, Range.FromLspRange(item.SelectionRange));
-            await lspEdgeSemaphore.WaitAsync(token);
         }
-        lspEdgeSemaphore.Release();
         return;
 
         bool SelectItem(CallHierarchyItem item)
@@ -623,22 +629,29 @@ public record LSPImporter(
     private async Task HandleTypeHierarchyAsync(Node node, Graph graph, CancellationToken token)
     {
         await lspEdgeSemaphore.WaitAsync(token);
-        IAsyncEnumerable<TypeHierarchyItem> results = Handler.SupertypesAsync(SelectItem, node.FilePath(), node.SourceLine - 1 ?? 0, node.SourceColumn - 1 ?? 0);
-        await foreach (TypeHierarchyItem item in results)
+        try
+        {
+            IAsyncEnumerable<TypeHierarchyItem> results = Handler.SupertypesAsync(SelectItem, node.FilePath(), node.SourceLine - 1 ?? 0, node.SourceColumn - 1 ?? 0);
+            await foreach (TypeHierarchyItem item in results)
+            {
+                lspEdgeSemaphore.Release();
+                token.ThrowIfCancellationRequested();
+                Node? targetNode = FindNodesByLocation(item.Uri.Path, Range.FromLspRange(item.Range), graph).FirstOrDefault();
+                if (targetNode == null)
+                {
+                    await lspEdgeSemaphore.WaitAsync(token);
+                    continue;
+                }
+                Edge? edge = AddEdge(node, targetNode, LSP.Extend, false, graph);
+                edge?.SetRange(SelectionRangeAttribute, Range.FromLspRange(item.SelectionRange));
+                await lspEdgeSemaphore.WaitAsync(token);
+            }
+        }
+        finally
         {
             lspEdgeSemaphore.Release();
-            token.ThrowIfCancellationRequested();
-            Node? targetNode = FindNodesByLocation(item.Uri.Path, Range.FromLspRange(item.Range), graph).FirstOrDefault();
-            if (targetNode == null)
-            {
-                await lspEdgeSemaphore.WaitAsync(token);
-                continue;
-            }
-            Edge? edge = AddEdge(node, targetNode, LSP.Extend, false, graph);
-            edge?.SetRange(SelectionRangeAttribute, Range.FromLspRange(item.SelectionRange));
-            await lspEdgeSemaphore.WaitAsync(token);
         }
-        lspEdgeSemaphore.Release();
+
         return;
 
         bool SelectItem(TypeHierarchyItem item)
@@ -810,31 +823,37 @@ public record LSPImporter(
                                            CancellationToken token = default)
     {
         await lspEdgeSemaphore.WaitAsync(token);
-        IAsyncEnumerable<LocationOrLocationLink> locations = lspFunction(node.FilePath(), node.SourceLine - 1 ?? 0, node.SourceColumn - 1 ?? 0);
-        await foreach (LocationOrLocationLink location in locations)
+        try
+        {
+            IAsyncEnumerable<LocationOrLocationLink> locations = lspFunction(node.FilePath(), node.SourceLine - 1 ?? 0, node.SourceColumn - 1 ?? 0);
+            await foreach (LocationOrLocationLink location in locations)
+            {
+                lspEdgeSemaphore.Release();
+                token.ThrowIfCancellationRequested();
+
+                if (location.IsLocation)
+                {
+                    // NOTE: We assume only local files are used.
+                    foreach (Node targetNode in FindNodesByLocation(location.Location!.Uri.Path, Range.FromLspRange(location.Location.Range), graph))
+                    {
+                        AddEdge(node, targetNode, type, reverseDirection, graph);
+                    }
+                }
+                else
+                {
+                    foreach (Node targetNode in FindNodesByLocation(location.LocationLink!.TargetUri.Path, Range.FromLspRange(location.LocationLink.TargetRange), graph))
+                    {
+                        Edge? edge = AddEdge(node, targetNode, type, reverseDirection, graph);
+                        edge?.SetRange(SelectionRangeAttribute, Range.FromLspRange(location.LocationLink.TargetSelectionRange));
+                    }
+                }
+                await lspEdgeSemaphore.WaitAsync(token);
+            }
+        }
+        finally
         {
             lspEdgeSemaphore.Release();
-            token.ThrowIfCancellationRequested();
-
-            if (location.IsLocation)
-            {
-                // NOTE: We assume only local files are used.
-                foreach (Node targetNode in FindNodesByLocation(location.Location!.Uri.Path, Range.FromLspRange(location.Location.Range), graph))
-                {
-                    AddEdge(node, targetNode, type, reverseDirection, graph);
-                }
-            }
-            else
-            {
-                foreach (Node targetNode in FindNodesByLocation(location.LocationLink!.TargetUri.Path, Range.FromLspRange(location.LocationLink.TargetRange), graph))
-                {
-                    Edge? edge = AddEdge(node, targetNode, type, reverseDirection, graph);
-                    edge?.SetRange(SelectionRangeAttribute, Range.FromLspRange(location.LocationLink.TargetSelectionRange));
-                }
-            }
-            await lspEdgeSemaphore.WaitAsync(token);
         }
-        lspEdgeSemaphore.Release();
     }
 
 
