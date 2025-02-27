@@ -290,7 +290,7 @@ public class LSPHandler(LSPServer server, string projectPath, bool logLSP = true
                                                       .OnShowMessage(ShowMessage)
                                                       .OnWorkDoneProgressCreate(HandleInitialWorkDoneProgress));
             // Starting the server might take a little while.
-            await Client.Initialize(token).WaitOrThrowAsync(TimeoutSpan * 4, token);
+            await Client.Initialize(token).WaitOrThrowAsync(TimeoutSpan * 8, token);
             do
             {
                 // We wait until the initial work is done.
@@ -396,9 +396,14 @@ public class LSPHandler(LSPServer server, string projectPath, bool logLSP = true
                 }
                 if (messageParams.Message.Contains(".mvn/wrapper [in mailserver]"))
                 {
-                    // We can safely ignore this message, as we don't care about shutdown errors.
+                    // This JDTLS error can be ignored—it doesn't cause any actual errors in the exported graph.
                     return;
-                }		
+                }
+                if (messageParams.Message.Contains("unable to compute deps errors: stat : no such file or directory"))
+                {
+                    // I think this error from Gopls is only relevant for external dependencies, which we don't care about.
+                    return;
+                }
                 Trace.TraceError(messageParams.Message);
                 break;
             case MessageType.Warning:
@@ -478,7 +483,12 @@ public class LSPHandler(LSPServer server, string projectPath, bool logLSP = true
             TextDocument = new TextDocumentIdentifier(path),
             Position = new Position(line, character)
         };
-        return await Client!.RequestHover(hoverParams).WaitOrDefaultAsync(TimeoutSpan);
+        try {
+          return await Client!.RequestHover(hoverParams).WaitOrDefaultAsync(TimeoutSpan);
+        } catch (JsonRpcException e) when (Server == LSPServer.Gopls && e.Message.Contains("no package metadata for file")) {
+          // This means we cannot get metadata for the given file, which is fine.
+          return null;
+        }
     }
 
     /// <summary>
