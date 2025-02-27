@@ -394,6 +394,11 @@ public class LSPHandler(LSPServer server, string projectPath, bool logLSP = true
                     // We can safely ignore this message, as we don't care about shutdown errors.
                     return;
                 }
+                if (messageParams.Message.Contains(".mvn/wrapper [in mailserver]"))
+                {
+                    // We can safely ignore this message, as we don't care about shutdown errors.
+                    return;
+                }		
                 Trace.TraceError(messageParams.Message);
                 break;
             case MessageType.Warning:
