@@ -371,30 +371,37 @@ public record LSPImporter(
                                             // Depending on capabilities and settings, we connect the nodes with edges.
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Definition) && (Handler.ServerCapabilities?.DefinitionProvider).TrueOrValue())
                                             {
+						TraceEdge($"Gathering edges of type {EdgeKind.Definition}");
                                                 await ConnectNodeViaAsync(Handler.DefinitionAsync, LSP.Definition, node, graph, token: token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Declaration) && (Handler.ServerCapabilities?.DeclarationProvider).TrueOrValue())
                                             {
+						TraceEdge($"Gathering edges of type {EdgeKind.Declaration}");
                                                 await ConnectNodeViaAsync(Handler.DeclarationAsync, LSP.Declaration, node, graph, token: token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.TypeDefinition) && (Handler.ServerCapabilities?.TypeDefinitionProvider).TrueOrValue())
                                             {
+						TraceEdge($"Gathering edges of type {EdgeKind.TypeDefinition}");
                                                 await ConnectNodeViaAsync(Handler.TypeDefinitionAsync, LSP.OfType, node, graph, token: token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Implementation) && (Handler.ServerCapabilities?.ImplementationProvider).TrueOrValue())
                                             {
+						TraceEdge($"Gathering edges of type {EdgeKind.Implementation}");
                                                 await ConnectNodeViaAsync(Handler.ImplementationAsync, LSP.ImplementationOf, node, graph, reverseDirection: true, token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Reference) && (Handler.ServerCapabilities?.ReferencesProvider).TrueOrValue())
                                             {
+						TraceEdge($"Gathering edges of type {EdgeKind.Reference}");
                                                 await ConnectNodeViaAsync((p, line, character) => Handler.ReferencesAsync(p, line, character), LSP.Reference, node, graph, reverseDirection: true, token);
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Call) && (Handler.ServerCapabilities?.CallHierarchyProvider).TrueOrValue())
                                             {
+						TraceEdge($"Gathering edges of type {EdgeKind.Call}");
                                                 await HandleEdgeHierarchy(() => HandleCallHierarchyAsync(node, graph, token));
                                             }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Extend) && (Handler.ServerCapabilities?.TypeHierarchyProvider).TrueOrValue())
                                             {
+						TraceEdge($"Gathering edges of type {EdgeKind.Extend}");
                                                 await HandleEdgeHierarchy(() => HandleTypeHierarchyAsync(node, graph, token));
                                             }
                                         }
@@ -446,6 +453,15 @@ public record LSPImporter(
 
         return graph;
 
+	static void TraceEdge(string message)
+	{
+	    // Turn this on to detect edge types that are expensive to obtain from the language server.
+	    if (false)
+	    { 
+	        Trace.TraceInformation(message);
+	    }
+	}
+	
         async Task HandleEdgeHierarchy(Func<Task> hierarchyFunction)
         {
             try
