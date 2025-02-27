@@ -493,7 +493,7 @@ public record LSPImporter(
                 string relativePath = Path.GetRelativePath(Handler.ProjectPath, node.Directory!);
                 string packageName = relativePath.Replace(Path.DirectorySeparatorChar, '.').TrimEnd('.');
 
-                if (packageNodes.TryGetValue(packageName, out Node? package))
+                if (packageNodes.TryGetValue(packageName, out Node? package) || string.IsNullOrEmpty(packageName))
                 {
                     // The package node already exists, so we reparent the class node to it.
                     node.Reparent(package);
