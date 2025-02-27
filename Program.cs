@@ -244,8 +244,10 @@ public class Program
         Graph? graph;
         try
         {
+            Performance startupPerf = Performance.Begin("LSP Startup", performanceOutputFile.FullName);
             await handler.InitializeAsync(executablePath: fullPath, token: token);
             token.ThrowIfCancellationRequested();
+            startupPerf.End();
             progressBar.Tick(1);
 
             LSPImporter importer = new(handler,
