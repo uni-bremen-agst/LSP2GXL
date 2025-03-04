@@ -404,6 +404,11 @@ public class LSPHandler(LSPServer server, string projectPath, bool logLSP = true
                     // I think this error from Gopls is only relevant for external dependencies, which we don't care about.
                     return;
                 }
+                if (messageParams.Message.Contains("OmniSharp.Extensions.JsonRpc.DefaultRequestInvoker: Failed to handle request textDocument/didOpen"))
+                {
+                    // This means a document failed to open, which is fine for the OmniSharp server.
+                    return;
+                }
                 Trace.TraceError(messageParams.Message);
                 break;
             case MessageType.Warning:
