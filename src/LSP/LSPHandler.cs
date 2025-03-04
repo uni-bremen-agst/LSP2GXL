@@ -399,6 +399,11 @@ public class LSPHandler(LSPServer server, string projectPath, bool logLSP = true
                     // This JDTLS error can be ignored—it doesn't cause any actual errors in the exported graph.
                     return;
                 }
+                if (messageParams.Message.Contains("Cannot download Gradle sha256 checksum"))
+                {
+                    // This JDTLS error can be ignored—it doesn't cause any actual errors in the exported graph.
+                    return;
+                }
                 if (messageParams.Message.Contains("unable to compute deps errors: stat : no such file or directory"))
                 {
                     // I think this error from Gopls is only relevant for external dependencies, which we don't care about.
