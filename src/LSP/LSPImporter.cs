@@ -397,8 +397,16 @@ public record LSPImporter(
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Call) && (Handler.ServerCapabilities?.CallHierarchyProvider).TrueOrValue())
                                             {
                                                 TraceEdge($"Gathering edges of type {EdgeKind.Call}");
-                                                await HandleEdgeHierarchy(() => HandleCallHierarchyAsync(node, graph, token));
-                                            }
+
+						try
+						{
+                                                   await HandleEdgeHierarchy(() => HandleCallHierarchyAsync(node, graph, token));
+						}
+						catch (Exception e) when (e.Message.Contains("Value cannot be null. (Parameter 'source')"))
+						{
+						    // Intentionally left blank: We want to ignore this kind of error.
+						}
+					    }
                                             if (IncludeEdgeTypes.HasFlag(EdgeKind.Extend) && (Handler.ServerCapabilities?.TypeHierarchyProvider).TrueOrValue())
                                             {
                                                 TraceEdge($"Gathering edges of type {EdgeKind.Extend}");
