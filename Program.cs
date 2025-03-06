@@ -282,7 +282,11 @@ public class Program
         finally
         {
             progressBar.Message = "Shutting down LSP server...";
-            await handler.ShutdownAsync(token);
+            // Two of the language servers block in/out streams on shutdown, and the shutdown doesn't
+            // seem to accomplish much anyway, so we just disable it for them.
+            if (lspServer != LSPServer.Pyright && lspServer != LSPServer.TypescriptLanguageServer) {
+              await handler.ShutdownAsync(token);
+            }
             handler.ReleaseStreams();
         }
         if (graph == null)
